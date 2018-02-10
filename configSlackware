@@ -1,0 +1,917 @@
+#!/bin/bash
+############################################################
+#ATTENTION !!!
+#PLEASE USE THE SCRIPT AS FOLLOWING COMMAND:
+##sh configSlackware
+#it is recommended that you should run the script twice.
+#after first running, reboot your system,then use the user 000 login without password
+#using xfce,run audacious once,then run the script as root at the second time.
+############################################################
+#by 229
+#26/November/2017
+############################################################
+############################################################
+#first's first
+clear
+#get the script's path
+cpath=$(cd $(dirname $0);pwd)'/'
+searchpath='/'
+temp='/tmp/'
+waitseconds=10
+#file not found token
+notfoundtk="NOTFOUND"
+timeinf=$(date +%d_%B_%Y-%H_%M_%S)
+#show on the screen and write to the log file
+#logfile
+logfile=${cpath}"229_${timeinf}.log"
+fifofile=${temp}"229_${timeinf}.fifo"
+touch ${logfile}
+mkfifo ${fifofile}
+cat ${fifofile} | tee ${logfile} &
+exec &> ${fifofile}
+############################################################
+#some functions
+#display contents with red font
+# input method: ctrl+v,then press ESC
+#usage: rfont string
+function rfont() {
+echo [31m "$1" [0m
+}
+#display contents with green font
+#usage: gfont string
+function gfont() {
+echo [32m "$1" [0m
+}
+#display contents with blue font
+#usage: bfont string
+function bfont() {
+echo [34m "$1" [0m
+}
+#function md5check
+#usage: Md5Check file1 file2
+function Md5Check() {
+local f1
+local f2
+local v1
+local v2
+f1=$1
+f2=$2
+v1=$(md5sum ${f1} | awk '{print $1}')
+v2=$(md5sum ${f2} | awk '{print $1}')
+if [ ${v1} = ${v2} ]
+then
+	echo "md5sum : ${v1} : ${f1}"
+	echo "md5sum : ${v2} : ${f2}"
+	gfont "OK"
+else
+	echo "md5sum : ${v1} : ${f1}"
+	echo "md5sum : ${v2} : ${f2}"
+	rfont "ERROR"
+fi
+}
+#function add fstab configure information to the target file
+#usage: addinf2f number partition&filesystemlistfile  file
+function addinf2f () {
+local lnumber
+local sourcefile
+local targetfile
+local mountpath
+local exttk
+local ntfstk
+mountpath='/media/'
+exttk='defaults'
+ntfstk='fmask=111,dmask=000'
+lnumber=$1
+sourcefile=$2
+targetfile=$3
+while read line
+do
+diskpartition=$(echo ${line}|awk '{print $1}')
+diskfilesystem=$(echo ${line}|awk '{print $2}')
+case ${diskfilesystem} in
+	ext[0-9] )
+#		addinf="/dev/${diskpartition}	${mountpath}${diskpartition}	${diskfilesystem}	${exttk}	1	2";;
+		addinf="/dev/${diskpartition}        ${mountpath}${diskpartition}      ${diskfilesystem}        ${exttk}         1   2";;
+	ntfs )
+#		addinf="/dev/${diskpartition}	${mountpath}${diskpartition}	${diskfilesystem}-3g	${ntfstk}	1	0";;
+		addinf="/dev/${diskpartition}        ${mountpath}${diskpartition}      ${diskfilesystem}-3g     ${ntfstk} 1   0";;
+esac
+#checking the ${addinf} is already in the ${targetfile} or not
+grep "${addinf}" ${targetfile} &> /dev/null
+if [ $? -ne 0 ]
+then
+#insert the ${addinf} after the line ${lnumber} of the file ${targetfile}
+#	sed -i "${lnumber}a${addinf}" ${targetfile}
+#if you want to creat a new fstab configure file, could try this:
+	echo "${addinf}" >> ${targetfile}
+	lnumber=$[${lnumber} + 1]
+fi
+done < ${sourcefile}
+echo ${lnumber}
+}
+#function for search the latest file
+#usage: searchfile path filename
+function searchfile() {
+local searchp
+local searchf
+local latest
+local latestf
+local t
+local tf1
+local tf2
+searchp=$1
+searchf=$2
+tf1=$(mktemp -t 229_XXXXXX)
+tf2=$(mktemp -t 229_XXXXXX)
+find ${searchp} -name ${searchf} &> ${tf1}
+#here use ${searchf#*.} instead of ${searchf} to avoid the character * problem
+cat ${tf1} | grep ${searchf#*.} > ${tf2}
+if [ $? -eq 0 ]
+then
+	latest=0
+	while read line
+	do
+	t=$(stat "${line}" | grep 'Modify' | awk '{print $2}' | sed 's/-//g' 2>/dev/null)
+	if [ ${t} -gt ${latest} ]
+	then
+	latest=${t}
+	latestf="${line}"
+	fi
+	done < ${tf2}
+#return the result
+	echo "${latestf}"
+else
+#if not found the result ,return not found token
+	echo "${notfoundtk}"
+fi
+#delete any temporary files
+rm ${tf1} ${tf2} &> /dev/null
+}
+############################################################
+#show attention
+echo "################################################################################"
+rfont "     ATTENTION !!!"
+rfont "     PLEASE USE THE SCRIPT AS FOLLOWING COMMAND:"
+rfont "     #sh configSlackware"
+gfont "it is recommended that you should run the script twice."
+gfont "after first running, reboot your system,then use the user 000 login without password"
+gfont "using xfce,run audacious once,then run the script as root at the second time."
+echo "Now I try to check if everything is ready ..."
+echo "################################################################################"
+############################################################
+#00. use hard disks
+#configure fstab
+############################################################
+#00.0 generate fstab configure file
+fstabpath='/etc/'
+ffstab='fstab'
+fstabf=${fstabpath}${ffstab}
+diskfstabpath='fstabconfig/'
+diskfstab='diskfstab.txt'
+targetfstabf=${cpath}${diskfstabpath}${diskfstab}
+#the first insert line number
+lnum=1
+#use lsblk to generate fstab configure file
+#if there is not lsblk, EXIT the script!
+which lsblk &> /dev/null
+if [ $? -ne 0 ]
+then
+	rfont "lsblk was not found,can not configure the fstab, EXIT !!"
+	echo "################################################################################"
+	exit 1
+fi
+#process to show file
+#usage: showfile number filename
+showfile() {
+local lnum
+local tf
+lnum=$1
+tf=$2
+if [ ${lnum} -gt 0 ]
+then
+#if the file contents have been changed,show the contents
+	cat ${tf}
+	rfont "totoal ${lnum} item(s) have been added to the file ${tf}."
+else
+#if the file contents have not been changed
+	gfont "${tf} has not been changed."
+fi
+}
+#the fstab configure file directory
+if [ ! -d ${cpath}${diskfstabpath} ]; then mkdir -p ${cpath}${diskfstabpath}; fi
+if [ -f ${targetfstabf} ]; then rm ${targetfstabf}; fi
+#some temporary files
+tempfile=$(mktemp -t 229_XXXXXX)
+exttf=$(mktemp -t 229_ext_XXXXXX)
+ntfstf=$(mktemp -t 229_ntfs_XXXXXX)
+lsblk -lf | awk '{print $1" "$2}' | grep "sd[a-z][0-9]" | grep -E "ext[0-9]|ntfs|fat[0-9][0-9]" > ${tempfile}
+rootpartition=$(cat ${fstabf} | grep "sd[a-z][0-9]" | awk '{print $1" "$2}' | grep '/$' | awk '{print $1}' | cut -d / -f 3)
+sed -i "/${rootpartition}/d" ${tempfile}
+cat ${tempfile} | grep "ext[0-9]" > ${exttf}
+cat ${tempfile} | grep "ntfs" > ${ntfstf}
+#add information to the target file
+#if the file ${targetfstabf} does not exist,could try this:
+#echo ''>> ${targetfstabf}
+#but the file ${targetfstabf} is not really empty,since there is a space character in it!
+#and you could try this:
+touch ${targetfstabf}
+#and now the file ${targetfstabf} is a really empty file!but could not work with sed!
+#first add extX file systems
+lnum=$(addinf2f ${lnum} ${exttf} ${targetfstabf})
+#then add ntfs file systems
+lnum=$(addinf2f ${lnum} ${ntfstf} ${targetfstabf})
+#delete any temporary files
+rm ${tempfile} ${exttf} ${ntfstf}
+#display the ${targetfstabf}
+lnum=$[${lnum} - 1]
+#if file ${targetfstabf} has been changed,show the contents of it
+showfile ${lnum} ${targetfstabf}
+############################################################
+#00.1 insert the contents of the file ${targetfstabf} into ${fstabf}
+lnum=1
+while read line
+do
+grep "${line}" ${fstabf} &> /dev/null
+if [ $? -ne 0 ]
+then
+	sed -i "${lnum}a${line}" ${fstabf}
+	lnum=$[${lnum} + 1]
+fi
+done < ${targetfstabf}
+lnum=$[${lnum} - 1]
+#if file ${fstabf} has been changed,show the contents of it
+showfile ${lnum} ${fstabf}
+############################################################
+#00.2 if some relevant directories do not exist,try to creat them
+dirs=$(mktemp -t  229_dirs_XXXXXXX )
+cat ${targetfstabf} | awk '{print $2}' > ${dirs}
+cat ${dirs} | while read line
+do
+if [ -d ${line} ]
+then
+	gfont "the mount point ${line} has already existed."
+else
+	mkdir -p ${line}
+	gfont "the mount point ${line} was created successfully."
+fi
+done
+rm ${dirs} &> /dev/null
+#00.3 add "#" to the beginning of the line which contains "cdrom" or "fd0"
+sed -r -i "/(cdrom|fd0)/{s/^#*/#/}" ${fstabf}
+#
+Md5Check ${diskfstabpath}${ffstab} ${fstabf}
+gfont "00 fstab is ready."
+echo  "let's wait for ${waitseconds} seconds ..."
+sleep ${waitseconds}
+#
+############################################################
+############################################################
+#01.add 000 regular user
+#configure 000 user
+pwpath='/etc/'
+pfile='passwd'
+sfile='shadow'
+gfile='group'
+gsfile='gshadow'
+adduser='000'
+adduserhome="/home/${adduser}"
+addgroup='000'
+auid='5200'
+agid='520'
+#01.1 configure the passwd
+addinf="${adduser}::${auid}:${agid}::${adduserhome}:/bin/bash"
+#add user information to passwd
+grep "${addinf}"  ${pwpath}${pfile}  &> /dev/null
+if [ $? -ne 0 ]; then
+sed -i "$ a${addinf}" ${pwpath}${pfile}
+fi
+Md5Check ${pfile} ${pwpath}${pfile}
+gfont "01.1 passwd is ready."
+gfont "user ${adduser} has been added."
+#
+#01.2 configure the shadow
+#get some data from the first line
+dayinf=$(awk -F ':' 'FNR==1{print $3}' ${pwpath}${sfile} )
+ccinf=$(awk -F ':' 'FNR==1{print $4}' ${pwpath}${sfile} )
+saddinf="${adduser}::${dayinf}:${ccinf}:::::"
+grep "${saddinf}"  ${pwpath}${sfile} &> /dev/null
+if [ $? -ne 0 ]; then
+sed -i "$ a${saddinf}" ${pwpath}${sfile}
+fi
+Md5Check ${sfile} ${pwpath}${sfile}
+gfont "01.2 shadow is ready."
+#
+#01.3 configure the group
+#allgroups='root,bin,daemon,sys,adm,tty,disk,lp,mem,kmem,wheel,floppy,mail,news,uucp,man,dialout,audio,video,cdrom,games,slocate,utmp,smmsp,tape,mysql,rpc,sshd,gdm,shadow,ftp,oprofile,apache,messagebus,haldaemon,plugdev,power,netdev,pop,scanner,nobody,nogroup,users,console,000,vboxusers'
+addgroups='bin tty disk lp wheel mail news man audio video cdrom games mysql ftp messagebus plugdev power netdev pop users console 000 vboxusers'
+#remove ${adduser} from ${gfile}
+#sed -r -i "s/,?${adduser}$//" ${pwpath}${gfile}
+#
+#add ${addgroup} to ${gfile}
+addinf1="${addgroup}::${agid}:"
+addinf2='vboxusers:x:999:'
+grep "${addinf1}"  ${pwpath}${gfile} &> /dev/null
+if [ $? -ne 0 ]; then
+sed -i "$ a${addinf1}" ${pwpath}${gfile}
+fi
+grep "${addinf2}"  ${pwpath}${gfile} &> /dev/null
+if [ $? -ne 0 ]; then
+sed -i "$ a${addinf2}" ${pwpath}${gfile}
+fi
+#
+#add ${adduser} to ${gfile}
+for gs in ${addgroups}
+do
+	#be care of the sequence:first replace the line not end with ":",then replace the line end with ":"
+	grep "^${gs}:.*${adduser}$" ${pwpath}${gfile} &> /dev/null
+	if [ $? -ne 0 ]; then
+	sed -r -i "/^${gs}/{s/([^:])$/\1,${adduser}/; s/(:)$/\1${adduser}/}" ${pwpath}${gfile}
+	fi
+done
+Md5Check ${gfile} ${pwpath}${gfile}
+gfont "01.3 group is ready."
+gfont "group ${addgroup} has been added."
+gfont "group vboxusers has been added."
+#
+#01.4 configure the gshadow
+#
+Md5Check ${gsfile} ${pwpath}${gsfile}
+gfont "01.4 gshadow is ready."
+#
+#01.5 configure sudoers
+#add ${adduser} to sudoers
+sudopath='/etc/'
+sudof='sudoers'
+sudouserinf="${adduser}  ALL=(ALL) NOPASSWD:  ALL"
+privilegetk='User privilege specification'
+grep "${sudouserinf}"  ${sudopath}${sudof} &> /dev/null
+if [ $? -ne 0 ]; then
+chmod 640 ${sudopath}${sudof}
+sed -i "/${privilegetk}/{
+n
+n
+a\
+${sudouserinf}
+}" ${sudopath}${sudof}
+fi
+chmod 440 ${sudopath}${sudof}
+Md5Check ${sudof} ${sudopath}${sudof}
+gfont "01.5 sudoers is ready."
+gfont "user ${adduser} has privilege specification now."
+#
+#01.6 create user home directory
+if [ ! -d ${adduserhome} ]
+then
+mkdir -p ${adduserhome}
+fi
+echo $(ls -A ${adduserhome}  --color)
+gfont "01.6 ${adduserhome} is ready."
+echo "################################################################################"
+#
+############################################################
+############################################################
+#02.support CJK characters set
+#In Slackware 15.0 and later, the default locale already is en_US.UTF-8
+#configure locale
+#function changlocale
+#usage: changlocale localefile
+#function changlocale() {
+#local fn
+#local tk1
+#local tk2
+#fn=$1
+#tk1='default locale'
+#tk2='en_US.UTF-8'
+#############################################################
+##add "#" to the beginnig of next line contains ${tk1}
+#############################################################
+##way1:use sed and regular express engine
+#sed -n '/${tk1}/{n;p}' ${fn} | grep "^#*" &> /dev/null
+#if [ $? -ne 0 ]; then
+#sed -i "/${tk1}/{n;s/^#*/#/}" ${fn}
+#fi
+#############################################################
+##remove "#" in the beginning of line contains ${tk2}
+#############################################################
+##way1:use sed and regular express engine
+#grep "${tk2}" ${fn} | grep "^[^#]" &> /dev/null
+#if [ $? -ne 0 ]; then
+#sed -i "/${tk2}/{s/^#*//}" ${fn}
+#fi
+#############################################################
+##way2:get the line number
+##local ln1
+##ln1=$(grep -n "${tk1}" ${fn} | awk -F ':' '{print $1}' )
+#}
+##
+#path1='/etc/profile.d/'
+#f1='lang.sh'
+#f2='lang.csh'
+#changlocale ${path1}${f1}
+#changlocale ${path1}${f2}
+#Md5Check ${f1} ${path1}${f1}
+#gfont "02.1 lang.sh is ready."
+#Md5Check ${f2} ${path1}${f2}
+#gfont "02.2 lang.csh is ready."
+##active locale
+#source ${path1}${f1}
+#source ${path1}${f2}
+gfont "System default locale has already been en_US.UTF-8."
+#
+############################################################
+############################################################
+#03.configure alsamixer(alsactl store)
+#config alsa
+#initial file location: PREFIX/share/alsa/init/00main
+#state file location: /var/lib/alsa/asound.state
+asspath='/var/lib/alsa/'
+assfile='asound.state'
+if [ ! -f ${assfile} ]
+then
+	echo "03 Failed to configure alsamixer!!"
+else
+	if  [  ${asspath}${assfile} -nt ${assfile} ]
+	then
+		bfont "The existed alsa configure file is newer than the current file!"
+		echo [34m"Are you sure to replace it ?[0m([31mN[0m/[31my[0m)[34m Here [31mNo[34m is the default and safe choice."
+		bfont "${waitseconds} seconds later turn to the default choice."
+		echo -n "[34mPlease enter your choice :"[0m
+#wait for 20 seconds if no key was pressed.
+		read -t ${waitseconds} ans
+		echo
+		case ${ans} in
+		[yY] | [yY][eE][sS] )
+			cp ${assfile} ${asspath}${assfile}
+			chown root:root ${asspath}${assfile}
+			chmod 644 ${asspath}${assfile}
+			rfont "03 alsamixer configure has been overwrited!";;
+		* )
+			gfont "03 the existed alsa configure has not been changed.";;
+		esac
+	else
+		cp ${assfile} ${asspath}${assfile}
+		chown root:root ${asspath}${assfile}
+		chmod 644 ${asspath}${assfile}
+		gfont "03 alsamixer is ready."
+	fi
+fi
+#
+############################################################
+############################################################
+#04.fonts configure
+fontsconfigpath='/etc/fonts/conf.d/'
+fcpp='fonts/'
+myffile='myfonts.conf'
+cp -v "${fcpp}${myffile}"  "${fontsconfigpath}"'99-'"${myffile}"
+chmod 644 "${fontsconfigpath}"'99-'"${myffile}"
+fc-cache -fvs
+gfont "04 Fonts configured."
+##
+############################################################
+############################################################
+#05.input CJK characters
+#configure scim.sh and scim.csh
+path1='/etc/profile.d/'
+f3='scim.sh'
+f4='scim.csh'
+if [ ! -x ${path1}${f3} ]; then
+chmod +x  ${path1}${f3}
+fi
+gfont "05.1 scim.sh is ready."
+if [ ! -x ${path1}${f4} ]; then
+chmod +x  ${path1}${f4}
+fi
+gfont "05.2 scim.csh is ready."
+#active scim
+source ${path1}${f3}
+source ${path1}${f4}
+gfont "could use scim ime now."
+#
+############################################################
+############################################################
+#06.configure scim
+scimpath="${adduserhome}/.scim/"
+scimcf='config'
+scimgf='global'
+scimcofigpath='scim/'
+if [ ! -d ${scimcofigpath} ]
+then
+	rfont "06 Failed to configre ${adduser}'s scim!!"
+else
+	cd ${scimcofigpath} &> /dev/null
+	sconfig=$(ls update*.sh 2> /dev/null)
+	sh ${sconfig}
+	cd - &> /dev/null
+	gfont "06 ${adduser}'s scim is ready."
+fi
+#
+############################################################
+############################################################
+#07.configure vim and gvim,emacs
+vimconfigpath='vimconfig/'
+emacsconfigpath='emacsconfig/'
+asyconfigpath=${adduserhome}'/.asy/'
+if [ ! -d ${asyconfigpath} ]; then mkdir -p ${asyconfigpath}; fi
+if [ ! -d ${vimconfigpath} ]
+then
+	rfont "07.1 Failed to configure vim!!"
+else
+	cd ${vimconfigpath} &> /dev/null
+	vimcfile=$(ls update*.sh 2> /dev/null)
+	sh ${vimcfile}
+	cd - &> /dev/null
+	gfont "07.1 vim is ready."
+fi
+if [ ! -d ${emacsconfigpath} ]
+then
+	rfont "07.2 Failed to configure emacs!!"
+else
+	cd ${emacsconfigpath} &> /dev/null
+	emacscfile=$(ls update*.sh 2> /dev/null)
+	sh ${emacscfile}
+	cd - &> /dev/null
+	gfont "07.2 emacs is ready."
+fi
+#
+############################################################
+############################################################
+#08.texlive path
+#configure profile
+year0=$(date +%Y)
+month0=$(date +%m)
+#token month
+month='7'
+if [ ${month0} -lt ${month} ]
+then
+   year=$[${year0} - 1]
+else
+   year=${year0}
+fi
+patht1='/usr/local/texlive/'
+patht2='/texmf-var/fonts/conf/'
+off='texlive-fontconfig.conf'
+dpath='/etc/fonts/conf.d/'
+dff='09-texlive.conf'
+ppath='/bin/x86_64-linux'
+mpath='/texmf-dist/doc/man'
+ipath='/texmf-dist/doc/info'
+profilefile='/etc/profile'
+token='texlive'
+#judge whether "texlive" was already in ${PATH} or not
+if [[ "${PATH}" =~ "${token}" ]] || [[ "$(grep ${token} ${profilefile})" =~ "${token}"  ]]
+then
+	:
+else
+	echo "" >> ${profilefile}
+	echo 'export PATH=${PATH}'":${patht1}${year}${ppath}" >> ${profilefile}
+	echo 'export MANPATH=${MANPATH}'":${patht1}${year}${mpath}" >> ${profilefile}
+	echo 'export INFOPATH=${INFOPATH}'":${patht1}${year}${ipath}" >> ${profilefile}
+fi
+#active path
+source ${profilefile}
+#flash font cache, but may slow the system
+#cp -v ${patht1}${year}${patht2}${off} ${dpath}${dff}
+#chmod 644 ${dpath}${dff}
+#fc-cache -fsv
+	gfont "08 TeXlive is ready."
+#
+############################################################
+############################################################
+#09.configure x keyboard shortcuts
+#configure xfce keyboard shortcuts
+muttpath="${adduserhome}/"
+muttcpath='mutt/'
+xfceglobalpath='/etc/xdg/xfce4/xfconf/xfce-perchannel-xml/'
+xfcepath="${adduserhome}/.config/xfce4/xfconf/xfce-perchannel-xml/"
+xfcerootpath="/root/.config/xfce4/xfconf/xfce-perchannel-xml/"
+thunarpath="${adduserhome}/.config/thunar/"
+thunarcpath='thunar/'
+xfcepanelpath="${adduserhome}/.config/xfce4/"
+xfcepanelcpath='panel/'
+xfcecpath='xfce4/'
+muttrcf='.muttrc'
+ktks='name="XF86WWW" type="string"'
+xfcecf='xfce4-keyboard-shortcuts.xml'
+kshortcutsf='xfce4keyshortcuts.txt'
+xthunarf='thunar.xml'
+thunarfscm='accels.scm'
+xpanelf='xfce4-panel.xml'
+xpowerfile='xfce4-power-manager.xml'
+kdecfpath='kde/'
+kdecpath="${adduserhome}/.kde/share/config/"
+kdecf='kglobalshortcutsrc'
+#09.1 configure mutt
+if [ ! -f ${muttcpath}${muttrcf} ] || [ ! -d ${muttpath}  ]
+then
+	rfont "09.1 Failed to configure mutt!!"
+else
+	cp ${muttcpath}${muttrcf} ${muttpath}${muttrcf}
+	gfont "09.1 mutt is ready."
+fi
+#09.2 configure keyboard shortcuts
+if [ ! -d ${xfcepath} ]; then mkdir -p ${xfcepath}; fi
+if [ ! -f ${xfcepath}${xfcecf} ]; then echo  ' ' >>  ${xfcepath}${xfcecf}; fi
+if [ -f ${xfcecpath}${kshortcutsf} ]
+then
+	cat  ${xfcecpath}${kshortcutsf} | while read line
+		do
+			grep "${line}" ${xfcepath}${xfcecf} &> /dev/null
+			if [ $? -ne 0 ];then
+			sed -i "/${ktks}/{
+n
+n
+a\
+${line}
+}" ${xfcepath}${xfcecf}
+			fi
+	done
+	gfont "09.2.1 ${adduser}'s xfce keyboard shortcuts are ready."
+	cat  ${xfcecpath}${kshortcutsf} | while read line
+		do
+			grep "${line}" ${xfcerootpath}${xfcecf} &> /dev/null
+			if [ $? -ne 0 ];then
+			sed -i "/${ktks}/{
+n
+n
+a\
+${line}
+}" ${xfcerootpath}${xfcecf}
+			fi
+	done
+	gfont "09.2.2 root's xfce keyboard shortcuts are ready."
+else
+	rfont "09.2 Failed to configure xfce keyboard shortcuts!!"
+fi
+#09.3 configure thunar
+if [ ! -d ${thunarpath} ]
+then
+	mkdir -p ${thunarpath}
+fi
+if [ -f ${thunarcpath}${thunarfscm} ] && [ -d ${thunarpath} ] && [ -f ${xfcecpath}${xthunarf} ]  &&  [ -d ${xfcepath} ]
+then
+	cp ${thunarcpath}${thunarfscm} ${thunarpath}${thunarfscm}
+	cp ${xfcecpath}${xthunarf} ${xfcepath}${xthunarf}
+	gfont "09.3 thunar is ready."
+else
+	rfont "09.3 Failed to configure thunar!!"
+fi
+#09.4 configure xfce panel
+if [ ! -d ${xfcepanelpath} ]
+then
+   mkdir -p ${xfcepanelpath}
+fi
+if [ -f ${xfcecpath}${xpanelf} ] && [ -d ${xfcepath} ] && [ -d ${xfcecpath}${xfcepanelcpath} ] && [ -d ${xfcepanelpath} ]
+then
+	cp ${xfcecpath}${xpanelf} ${xfcepath}${xpanelf}
+	cp -r ${xfcecpath}${xfcepanelcpath} ${xfcepanelpath}
+	gfont "09.4 xfce panel is ready."
+else
+	rfont "09.4 Failed to configure xfce panel!!"
+fi
+#09.5 configure power manager
+if [ -f ${xfcecpath}${xpowerfile} ] && [ -d ${xfcepath} ]
+then
+	cp ${xfcecpath}${xpowerfile} ${xfcepath}${xpowerfile}
+	gfont "09.5 power manager is ready."
+else
+	rfont "09.5 Failed to configure power manager!!"
+fi
+#09.6 configure kde keyboard shortcuts
+if [ ! -d ${kdecpath} ]; then mkdir -p ${kdecpath}; fi
+if [ -f ${kdecfpath}${kdecf} ]
+then
+	cp ${kdecfpath}${kdecf} ${kdecpath}${kdecf}
+	chmod 644 ${kdecpath}${kdecf}
+	gfont "09.6 kde keyboard shortcuts are ready."
+else
+	rfont "09.6 Failed to configure kde keyboard shortcuts!!"
+fi
+#
+############################################################
+############################################################
+#10.configure audacious
+aupath="${adduserhome}/.config/audacious/"
+aufile='config'
+amiditk='\[amidiplug\]'
+midiftk='2gmgsmt.sf2'
+#you could put the midi font file's path here to avoiding searching,just like this:
+#midifontf='/media/sdb7/software/player/midi/soundfonts/midi_xp/2gmgsmt.sf2'
+if [ -z ${midifontf} ]
+then
+	echo "you could put the midi font file's path here to avoiding searching,just like:"
+	echo "/media/sdb7/software/player/midi/soundfonts/midi_xp/2gmgsmt.sf2"
+	echo "or you could wait for some seconds, let me search it for you ..."
+	echo -n "midifontf="
+	read -t ${waitseconds} midifontf
+	echo
+fi
+#function add mini font config to audacious config file
+#usage: addmidiconfig midifontfile
+function addmidiconfig() {
+local addauinf
+addauinf='fsyn_soundfont_file='"$1"
+if [ ! -d ${aupath} ]; then mkdir -p ${aupath}; fi
+if [ ! -f ${aupath}${aufile} ]; then echo ' ' >> ${aupath}${aufile}; fi
+chmod 644 ${aupath}${aufile}
+grep "${amiditk}" ${aupath}${aufile} &> /dev/null
+if [ $? -eq 0 ]
+then
+	grep "${addauinf}" ${aupath}${aufile} &> /dev/null
+	if [ $? -eq 0 ]
+	then
+		gfont "10 audacious is ready."
+	else
+		sed -i "/${amiditk}/{
+a\
+${addauinf}
+}"  ${aupath}${aufile}
+		gfont "10 audacious is ready."
+	fi
+else
+	sed -i '$ a\
+' ${aupath}${aufile}
+	sed -i "$ {
+a\
+${amiditk}
+}"  ${aupath}${aufile}
+	sed -i "$ a${addauinf}"  ${aupath}${aufile}
+	gfont "10 audacious is ready."
+fi
+}
+case ${midifontf} in
+	\/.*\.sf2 | \/.*\.dls )
+		if [ -f ${midifontf} ]
+		then
+			addmidiconfig "${midifontf}"
+		else
+			rfont "10 Failed to configure midi for audacious !!"
+			rfont "No midi font found !!"
+		fi;;
+	* )
+		echo "wrong midi font file path, i try to search it for you ..."
+		echo "searching midi font file ${midiftk}, please wait ..."
+		ts=${SECONDS}
+		midifontf=$(searchfile "${searchpath}"  ${midiftk})
+		if [ ${midifontf} = ${notfoundtk} ]
+		then
+			rfont "10 Failed to configure audacious!!"
+			rfont " for midi font file ${midiftk} no found !!"
+		else
+			gfont "found midi font:${midifontf} ! now configuring ..."
+			addmidiconfig "${midifontf}"
+		fi
+		echo "spent $[${SECONDS} - ${ts}] seconds.";;
+esac
+#
+############################################################
+############################################################
+#11.configure browser and mailer
+#configure mozilla firefox, thunderbird, seamonkey
+mfpath="${adduserhome}/.mozilla/firefox/"
+mtpath="${adduserhome}/.thunderbird/"
+mspath="${adduserhome}/.mozilla/seamonkey/"
+mprofiles='profiles.ini'
+mprefs='prefs.js'
+mffold="${adduser}/"
+mfcfold='mozilla/firefox/'
+mtcfold='thunderbird/'
+mscfold='mozilla/seamonkey/'
+if [ ! -d ${mfpath}${mffold} ]
+then
+	mkdir -p ${mfpath}${mffold}
+fi
+if [ ! -d ${mtpath}${mffold} ]
+then
+	mkdir -p ${mtpath}${mffold}
+fi
+if [ ! -d ${mspath}${mffold} ]
+then
+	mkdir -p ${mspath}${mffold}
+fi
+if [ -f ${mfcfold}${mprofiles} ] && [ -f ${mtcfold}${mprofiles} ] && [ -f ${mscfold}${mprofiles} ] && [ -f ${mfcfold}${mffold}${mprefs} ] && [ -f ${mtcfold}${mffold}${mprefs} ] && [ -f ${mscfold}${mffold}${mprefs} ]
+then
+	cp ${mfcfold}${mprofiles} ${mfpath}${mprofiles}
+	cp ${mtcfold}${mprofiles} ${mtpath}${mprofiles}
+	cp ${mscfold}${mprofiles} ${mspath}${mprofiles}
+	chmod 644 ${mfpath}${mprofiles}
+	chmod 644 ${mtpath}${mprofiles}
+	chmod 644 ${mspath}${mprofiles}
+	cp ${mfcfold}${mffold}${mprefs} ${mfpath}${mffold}${mprefs}
+	cp ${mtcfold}${mffold}${mprefs} ${mtpath}${mffold}${mprefs}
+	cp ${mscfold}${mffold}${mprefs} ${mspath}${mffold}${mprefs}
+	chmod 644 ${mfpath}${mffold}${mprefs}
+	chmod 644 ${mtpath}${mffold}${mprefs}
+	chmod 644 ${mspath}${mffold}${mprefs}
+	gfont "11 mozilla firefox,thunderbird and seamonkey is ready."
+else
+	rfont "11 Failed to configure mozilla firefox,thunderbird and seamonkey!!"
+fi
+#
+############################################################
+############################################################
+#12.configure Adobe flashplayer
+mozillafppath='/usr/lib64/mozilla/plugins/'
+libfilename='libflashplayer.so'
+targzfile="install_flash_player*.tar.gz"
+#you could put the latest flashplayer lib file 's path here to avoiding searching,just like:
+#libf='/media/sda7/software/flashplayer/4nonie/install_flash_player_11_2_202_569_linux.x86_64/libflashplayer.so'
+if [ -z ${libf} ]
+then
+	echo "you could put the latest flashplayer lib file's path here to avoiding searching, just like:"
+	echo "/media/sdb7/software/flashplayer/4nonie/install_flash_player_11_2_202_569_linux.x86_64/libflashplayer.so"
+	echo "or you could wait for some seconds, let me search the file ${libfilename} or ${targzfile} for you ..."
+	echo -n "libf="
+	read -t ${waitseconds} libf
+	echo
+fi
+#process update mozilla lib file
+updatelib() {
+local libfn
+libfn=$1
+cp "${libfn}" ${mozillafppath}
+chmod 755 ${mozillafppath}${libfilename}
+gfont "12 Adobe flashplayer is ready."
+}
+case ${libf} in
+	\/.*\/libflashplayer\.so )
+		if [ -f ${libf} ]
+		then
+			updatelib "${libf}"
+		else
+			rfont "12 Failed to configure Adobe flashplayer!!"
+			rfont "error: no ${libfilename} found !!"
+		fi;;
+	*)
+		echo "wrong libfile path, i try to search the latest lib file for you ..."
+		echo "searching the file ${libfilename}, please wait ..."
+		ts=${SECONDS}
+		#get the latest flashplayer lib file
+		libf=$(searchfile "${searchpath}" ${libfilename})
+		if [ ${libf} = ${notfoundtk} ]
+		then
+			echo "the lib file ${libfilename} was not found, now i try search ${targzfile}"
+			tzf=$(searchfile "${searchpath}" ${targzfile})
+			if  [ ${tzf} = ${notfoundtk} ]
+			then
+				rfont "12 Failed to configure Adobe flashplayer!!"
+				rfont "error: ${libfilename} and  ${targzfile} not found !!"
+			else
+				gfont "found flashplayer install file: ${tzf} ! now configuring ..."
+				td=$(mktemp -t -d 229_tzd_XXXXXX)'/'
+				tar xzf ${tzf} -C ${td}
+				libf=${td}${libfilename}
+				if [ -f "${libf}" ]
+				then
+					updatelib "${libf}"
+				else
+					rfont "12 Failed to configure Adobe flashplayer!!"
+					rfont "error: ${libfilename} not found  !!"
+				fi
+				rm -rf ${td}
+			fi
+		else
+			gfont "found lib file:${libf} ! now configuring ..."
+			updatelib "${libf}"
+		fi
+		echo "spent $[${SECONDS} - ${ts}] seconds.";;
+esac
+echo "################################################################################"
+#
+############################################################
+############################################################
+##13.install texlive
+#rfont "13 texlive has not been installed yet!!"
+##14.install virtualbox
+#rfont "14 virtualbox has not been installed yet!!"
+##15.install maxima
+#rfont "15 maxima has not been installed yet!!"
+##16.install audacious
+#rfont "16 all_in_one audacious needs to be installed!!"
+##17.install smplayer
+#rfont "17 smplayer has not been installed yet!!"
+##18.install free PASCAL (fpc)
+#rfont "18 free PASCAL (fpc) has not been installed yet!!"
+##
+############################################################
+############################################################
+#19. change the owner of ${adduserhome}
+chown -R ${adduser}:${addgroup} ${adduserhome}
+echo "################################################################################"
+gfont "     System has already successfully been configured !!"
+gfont "                 ENJOY SLACKWARE !!!"
+gfont "                     by 229"
+gfont "                 $(date +%d/%B/%Y)"
+echo "[32m               total spent [31m ${SECONDS}[32m seconds.[0m"
+gfont "you can check the log file ${logfile} for further details."
+echo "################################################################################"
+#
+#filter out some ANSI series and other characters in the log file
+sed -i "s/\[[0-9]*m//g" ${logfile}
+sed -i "s/\[[0-9]*\;[0-9]*m//g" ${logfile}
+sed -i "s/^[\ \t]//g" ${logfile}
+sed -i "s/[\ \t]*$//g" ${logfile}
+#show the EOF sign ^D
+#but i do not think it is necessary to do this.
+#echo -e "\015"
+############################################################
+############################################################

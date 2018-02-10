@@ -1,0 +1,102 @@
+#!/bin/bash
+#rsync slackware configure files to the 8G and lableled "zalois" usb disk
+#by 229  10/Februrary/2018
+#use blkid and lsblk to locate the 8G and labeled "zalois" usb disk
+#the capacity of the usb disk
+udv=7.7
+udl='zalois'
+upoint="/run/media/000/${udl}"
+#check the disk label, using blkid
+#if thers is not blkid, EXIT the script!
+which /sbin/blkid &> /dev/null
+if [ $? -ne 0 ]
+then
+	echo "blkid was not found, can not continue, EXIT !!"
+	echo "################################################################################"
+	exit 1
+fi
+sudo /sbin/blkid | grep ${udl} &> /dev/null
+if [ $? -ne 0 ]
+then
+	echo "no labeled \"${udl}\" usb disk found, EXIT !!"
+	exit 1
+fi
+#the labeled "${udl}" usbdisk location
+ud=$( sudo /sbin/blkid | grep ${udl} | cut -d : -f 1 )
+if [ ! -d ${upoint} ]
+then
+	sudo mkdir -p ${upoint}
+fi
+sudo umount ${ud} &> /dev/null
+sudo mount ${ud} ${upoint}
+#
+#check the usb disk capacity, using lsblk
+#if there is not lsblk, EXIT the script!
+which lsblk &> /dev/null
+if [ $? -ne 0 ]
+then
+	echo "lsblk was not found,can not continue, EXIT !!"
+	echo "################################################################################"
+	exit 1
+fi
+zdv=$(lsblk | grep ${upoint} | awk '{print $4}')
+zdv=$(echo ${zdv%G} | cut -d . -f 1)
+udv=$(echo ${udv} | cut -d . -f 1)
+if (( ${zdv} > ${udv} )) 
+then
+	echo "the capacity of the labeled \"${udl}\" usb disk is greater than 8 G, EXIT !!"
+	exit 1
+fi
+#
+#synchronize the configurational files to the 8G labeled "${udl}" usb disk, using rsync
+scpath='/media/sdc1/sysbak/'
+tcpath=${upoint}'/insl/'
+sgrubpath='/media/sdc1/os/rsyncSlackwareCurrent/slackware64-current/slackware64/a/'
+sgrubf="grub-*.txz*"
+tgrubp="${tcpath}grub2/"
+swgrubpath='/media/sdc1/os/boot/grub/'
+swgrubf="grub-*-for-windows.zip"
+initrdf='/media/sdc1/os/rsyncSlackwareCurrent/slackware64-current/isolinux/initrd.img'
+bzimagef='/media/sdc1/os/rsyncSlackwareCurrent/slackware64-current/kernels/huge.s/bzImage'
+tsb="${tcpath}slackwareConfigure/bookmarks/"
+tsg="${tcpath}slackwareConfigure/grub2Configure/"
+tss="${tcpath}slackwareConfigure/shellscript/"
+tsc="${tcpath}slackwareConfigure/slconfig/"
+if [ ! -d ${tsb} ] 
+then
+   	mkdir -p ${tsb}
+fi
+if [ ! -d ${tsg} ]
+then
+   	mkdir -p ${tsg}
+fi
+if [ ! -d ${tss} ]
+then
+   	mkdir -p ${tss}
+fi
+if [ ! -d ${tsc} ]
+then
+   	mkdir -p ${tsc}
+fi
+sf=( "${scpath}bookmarks/" "${scpath}grub2Configure/" "${scpath}shellscript/" "${scpath}slconfig/" "${initrdf}" "${bzimagef}" "${sgrubpath}${sgrubf}" "${swgrubpath}${swgrubf}")
+df=( "${tsb}" "${tsg}" "${tss}" "${tsc}" "${tcpath}initrd.img" "${tcpath}bzImage" "${tgrubp}" "${tgrubp}")
+for i in {0,1,2,3,4,5,6,7}
+do
+	echo ${sf[i]} '======>>>>>>'  ${df[i]}
+	#--exclude='*.bak'
+	rsync\
+		--specials --partial --delete --links\
+		--recursive --times --update --verbose\
+		--progress --human-readable\
+		--exclude ".0/"\
+		--exclude "vimPUNDO/"\
+		--exclude "*.iso"\
+		--exclude "*.mkv"\
+		--exclude "*.swp"\
+		${sf[i]} ${df[i]}
+
+done
+#remove disk
+sudo umount ${ud}
+sudo rmdir ${upoint}
+echo successfully completed !!

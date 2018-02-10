@@ -1,0 +1,40 @@
+#!/bin/bash
+#by 229 10/Feburary/2018
+#get the script's path
+#cpath=$(cd $(dirname $0);pwd)'/'
+#backup path
+bpath='/media/sdc1/sysbak/slconfig/'
+p0=${bpath}'000/'
+pr=${bpath}'root/'
+u0='/home/000/'
+ur='/root/'
+if  [ ! -d ${p0} ]
+then
+	mkdir -p ${p0}
+	chown 000:000 ${p0}
+fi
+if  [ ! -d ${pr} ]
+then
+	mkdir -p ${pr}
+	chown 000:000 ${pr}
+fi
+#backup user 000
+#fset=$( echo $( ls -AF ${p0} ) )
+rm -rf ${p0}* 2> /dev/null
+rm -rf ${p0}.* 2> /dev/null
+fset=".asy/ .config/ .dosbox/ .emacs .emacs.d/ .kde/ .mozilla/ .muttrc .scim/ .supertux2/ .thunderbird/ backupusers cd000public cdslc cleanwindows desktoprsyncSlackware64Current rsyncslc2udisk tt updatevim8"
+for f in ${fset}
+do
+cp -rv   ${u0}${f} ${p0}
+done
+chown -R 000:000 ${p0}
+#backup user root
+#fset=$( echo $( ls -AF ${pr} ) )
+rm -rf ${pr}* 2> /dev/null
+rm -rf ${pr}.* 2> /dev/null
+fset=".config/ .emacs .emacs.d/ .kde/ .mozilla/ .scim/ backupusers cd000public cdslc cleanwindows tt upslc"
+for f in ${fset}
+do
+cp -rv  ${ur}${f} ${pr}
+done
+chown -R 000:000 ${pr}

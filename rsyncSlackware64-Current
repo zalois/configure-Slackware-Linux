@@ -1,0 +1,69 @@
+#!/bin/bash
+################################################################################
+#remote files
+#rsync --delete --recursive --verbose anonymous@mirrors.kernel.org:slackware/slackware64-current/EFI/ ./EFI/
+################################################################################
+#local files
+#rsync --delete --recursive --verbose ./EFI/ ./EF2/
+#wget -c -m ftp://mirrors.kernel.org/slackware/slackware64-current/EFI/
+################################################################################
+#works!
+#    rsync address of your mirror
+#
+#        mirrorbrain will periodically scan the file tree exposed via rsync and use that information to determine if a) your mirror is online, and b) if your mirror actually has the file that a user has requested, and if both a) and b) are true, then users can be redirected to your mirror.
+#
+#        If you do not want the general public accessing your rsync server, then you need to whitelist this ip address block (207.223.116.208/29 - connections may come from .211 or .213) via iptables or some such. Please note that the rsync url *will* be published, so any restrictions to the general public will have to be on your end.
+#
+#    an email address that we can use to contact you
+#
+#        an alias like "mirror@" or "ftp@" is better than a single person's address; people tend to leave for new employment, die, and so on, and then we get bounce messages for nonexistent addresses... A bus number greater than 1 is better ;-)
+#
+#The previous mirrors admin had some sort of hierarchy worked out with respect to which mirrors were considered "primary" (and thus were okay for other mirrors to use for syncing), but I have been unable to find any documentation of that hierarchy. Therefore, this is the best I can do at the moment: You can use our primary mirror rsync://ftp.slackware.com/slackware/ (which is actually OSUOSL), but it's probably best to sync from one of the others to keep from overloading OSUOSL. Here are some that are probably good choices, but check the Mirror List for some other potential options:
+#  rsync://mirrors.kernel.org/slackware/
+#  rsync://taper.alienbase.nl/mirrors/slackware/
+#  rsync://slackware.org.uk/slackware/
+#
+#NOTE: everything below will be getting some updates soon
+#
+#Your mirror should use the same base directory structure: http://yourmirror.org/slackware/... e.g. if you want to mirror everything we have, then you'd do this:
+#
+#  rsync -aPSH --delete \
+#     --exclude "*-iso/" \
+#     rsync://your-upstream-mirror/slackware/ \
+#     /your-toplevel-pub/slackware/
+#
+#If you don't want to mirror the entire tree (it's currently ~150 GB with common files hardlinked), then you can use rsync's "--exclude" option to exclude some parts. As an example, if you do not want the /slackware/slackware-3.0/ directory mirrored, you would use this as an argument to rsync:
+#
+#"--exclude "slackware-3.0/""
+#
+#The --exclude argument can be used multiple times, or you can put excludes in a file and then use that file as the argument - see rsync(1) for more info.
+#
+#We do ask that you mirror at least the latest stable release (both 32 and 64 bit arch) and the -current development tree (both 32 and 64 bit arch).
+#
+#We also ask that you not place anything else inside the top slackware/ directory (e.g. unofficial package sets, slackbuilds.org scripts, and other things not on ftp.slackware.com) - this creates confusion about what is ours and what isn't.
+################################################################################
+#  rsync://ftp.slackware.com/slackware/
+#  rsync://mirrors.kernel.org/slackware/
+#  rsync://taper.alienbase.nl/mirrors/slackware/
+#  rsync://slackware.org.uk/slackware/
+################################################################################
+# rsyncing to the offical site
+################################################################################
+#rsync --specials --partial --progress --links --recursive --delete --verbose --human-readable rsync://ftp.slackware.com/slackware/slackware64-current/ ./slackware64-current/
+################################################################################
+# rsyncing to the other site
+################################################################################
+rsync\
+	--specials\
+	--partial\
+	--progress\
+	--links\
+	--recursive\
+	--delete\
+	--verbose\
+	--human-readable\
+	rsync://mirrors.kernel.org/slackware/slackware64-current/  ./slackware64-current/
+#	rsync://ftp.slackware.com/slackware/slackware64-current/ ./slackware64-current/
+#	rsync://mirrors.163.com/slackware/slackware64-current/  ./slackware64-current/
+#	rsync://ftp.twaren.net/Linux/Slackware/slackware64-current/  ./slackware64-current/
+#	rsync://mirror.bjtu.edu.cn/slackware/slackware64-current/  ./slackware64-current/

@@ -1,0 +1,6 @@
+#!/bin/bash
+cpath='/media/sdc1/os/rsyncSlackwareCurrent/'
+upscript='rsyncSlackware64-Current-kernel'
+cd ${cpath}
+sh ${upscript}
+gvim ${cpath}'slackware64-current/ChangeLog.txt'

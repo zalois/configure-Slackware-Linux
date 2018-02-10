@@ -1,0 +1,121 @@
+#!/bin/bash
+#usage: upslc 20180211
+#by 229 10/Februrary/2018
+# wget -m -nH --cut-dirs=1 -c -i texs
+#wget -c http://ncu.dl.sourceforge.net/project/gparted/gparted-live-stable/0.19.1-4/gparted-live-0.19.1-4-amd64.iso
+#$LS_OPTIONS=-F -b -T 0 --color=auto
+#alias ls='/bin/ls $LS_OPTIONS --group-directories-first'
+rm .bash_history .viminfo .serverauth.* .xfce4-session.verbose-log*  .esd_auth
+rm -rf .adobe/ .cache/ .dbus/ .gstreamer-0.10/ .gvfs/ .gnupg/ .macromedia/ .mplayer/ .thumbnails/ .gimp-2.8/ .gvfs/  .local/ .pki/
+if [ $# -ne 1 ]
+then
+	echo Usage: $(basename $0) YYYYMMDD
+	echo example: $(basename $0) 20180211
+	echo the day of the last updating
+	exit
+fi
+#update packages of slackware current
+#cpath=$(cd $(dirname $0);pwd)'/'
+cpath='/media/sdc1/os/rsyncSlackwareCurrent/'
+cd ${cpath}
+#slackware current packages
+pkgpath=${cpath}'slackware64-current/slackware64/'
+logfile=${cpath}'slackware64-current/ChangeLog.txt'
+#cut the zero before 01,...,09 
+day=$(date -d $1 "+%d" | awk '{print $0+0}')
+month=$(date -d $1 "+%b")
+year=$(date -d $1 "+%Y")
+tka='Added.$'
+tkr='Removed.$'
+tkb='Rebuilt.$'
+tku='Upgraded.$'
+#echo ${day} ${month} ${year}
+#get the line number of the line contains ${month} ${day} and ${year}
+lnn=$(echo $(sed -n "/${month}\ *${day}.*${year}$/=" ${logfile}  | head -1 ))
+lnn=$[ ${lnn} - 2 ]
+#echo ${ln}
+#create temporary files
+tf=$(mktemp -t 229_XXXXXX)
+tfa=$(mktemp -t 229_XXXXXX)
+tfaa=$(mktemp -t 229_XXXXXX)
+tfr=$(mktemp -t 229_XXXXXX)
+tfrr=$(mktemp -t 229_XXXXXX)
+tfb=$(mktemp -t 229_XXXXXX)
+tfbb=$(mktemp -t 229_XXXXXX)
+tfu=$(mktemp -t 229_XXXXXX)
+tfuu=$(mktemp -t 229_XXXXXX)
+head -n${lnn} ${logfile} > ${tf}
+#cat ${tf}
+grep ${tka} ${tf} > ${tfaa}
+grep ${tkr} ${tf} > ${tfrr}
+grep ${tkb} ${tf} > ${tfbb}
+grep ${tku} ${tf} > ${tfuu}
+#filter TeX and testing packages
+grep -v '^t//*' ${tfaa} | grep -v '^testing//*' > ${tfa}
+grep -v '^t//*' ${tfrr} | grep -v '^testing//*' > ${tfr}
+grep -v '^t//*' ${tfbb} | grep -v '^testing//*' > ${tfb}
+grep -v '^t//*' ${tfuu} | grep -v '^testing//*' > ${tfu}
+#add packages
+pa=$(gawk -F: '{print $1}' ${tfa})
+for p in ${pa}
+do
+echo adding package: ${p}
+/sbin/installpkg ${pkgpath}${p}
+done
+#remove packages
+pr=$(gawk -F: '{print $1}' ${tfr})
+for p in ${pr}
+do
+echo removing package: ${p}
+/sbin/removepkg ${pkgpath}${p}
+done
+#upgrade packages
+pu=$(gawk -F: '{print $1}' ${tfu})
+for p in ${pu}
+do
+echo upgrading package: ${p}
+/sbin/upgradepkg ${pkgpath}${p}
+done
+#rebuild packages
+pb=$(gawk -F: '{print $1}' ${tfb})
+for p in ${pb}
+do
+echo upgrading rebuilt package: ${p}
+/sbin/upgradepkg ${pkgpath}${p}
+done
+echo ================================================================================ 
+echo ================================================================================ 
+cat ${tfa}
+echo ================================================================================ 
+cat ${tfr}
+echo ================================================================================ 
+cat ${tfb}
+echo ================================================================================ 
+cat ${tfu}
+echo ================================================================================ 
+echo ================================================================================ 
+#remove temporary files
+rm ${tf}
+rm ${tfaa}
+rm ${tfrr}
+rm ${tfbb}
+rm ${tfuu}
+rm ${tfa}
+rm ${tfr}
+rm ${tfb}
+rm ${tfu}
+#################################################################################
+#################################################################################
+###ole version
+##fullpkg=( "a/" "ap/" "d/" "e/" "f/" "k/" "kde/" "kdei/" "l/" "n/" "t/" "tcl/" "x/" "xap/" "xfce/" "y/" )
+###upgrade packages
+###full upgrade
+###for i in {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
+###patial upgrade
+##for i in {0,1,2,3,4,5,6,7,8,9,11,12,13,14,15}
+##do
+##	echo upgradepkg ${fullpkg[i]}
+##	tmp1=${pkgpath}${fullpkg[i]}
+##	ls ${tmp1}*.txz -h --color
+##	upgradepkg ${tmp1}*.txz
+##done

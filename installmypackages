@@ -1,0 +1,134 @@
+#!/bin/bash
+################################################################################
+#by 229 4/February/2018
+#automatically install some software
+#1. maxima 5.41
+p1='/media/sdb7/math/maxima/'
+pf1='maxima-5.41.0-x86_64-1_SBo.txz'
+installpkg ${p1}${pf1}
+################################################################################
+#2. JabRef 4.0
+#2.1 requires jdk 8u152
+p21='/media/sdb7/math/TeX/JabRef/requires_jdk/'
+pf21='jdk-8u152-x86_64-1_SBo.txz'
+installpkg ${p21}${pf21}
+#2.2 jabref 4.1
+p22='/media/sdb7/math/TeX/JabRef/'
+pf22='JabRef-4.1-noarch-1_SBo.txz'
+installpkg ${p22}${pf22}
+################################################################################
+#3. perl-tk 804.033
+p3='/media/sdb7/math/TeX/perl-tk/'
+pf3='perl-tk-804.033-x86_64-1_SBo.txz'
+installpkg ${p3}${pf3}
+################################################################################
+#4. texlive 2017
+p4='/media/sdb7/math/TeX/texlive/2017/'
+pf4='texlive2017-20170524.iso'
+mount -o loop ${p4}${pf4} /mnt
+perl /mnt/install-pl
+umount /mnt/
+################################################################################
+#5. texi2html 5.0
+p5='/media/sdb7/math/TeX/texlive/texlive_requires/texi2html/'
+pf5='texi2html-5.0-x86_64-1_SBo.txz'
+installpkg ${p5}${pf5}
+################################################################################
+#6. p7zip 16.02
+p6='/media/sdb7/software/archiver/7zip/'
+pf6='p7zip-16.02-x86_64-2_SBo.txz'
+installpkg ${p6}${pf6}
+################################################################################
+#7. winrar 5.5.0 & unrar 5.5.8
+p7='/media/sdb7/software/archiver/winrar/'
+pf71='rar-5.5.0-x86_64-1_SBo.txz'
+pf72='unrar-5.5.8-x86_64-1_SBo.txz'
+installpkg ${p7}${pf71}
+installpkg ${p7}${pf72}
+################################################################################
+#8. chrome 64.0.3282.140
+p8='/media/sdb7/software/browser/chrome/'
+pf8='google-chrome-64.0.3282.140-x86_64-1.txz'
+installpkg ${p8}${pf8}
+################################################################################
+#9. wps 10.1.0.5707 
+p9='/media/sdb7/software/office/wps/'
+pf1='libpng-legacy12-1.2.57-x86_64-1_SBo.txz'
+pf2='wps-office-10.1.0.5707~a21-x86_64-1_SBo.txz'
+installpkg ${p9}${pf1}
+installpkg ${p9}${pf2}
+################################################################################
+#10. smplayer 18.2.0
+p10='/media/sdb7/software/player/smplayer/'
+pf10='smplayer-18.2.0-x86_64-1_SBo.txz'
+installpkg ${p10}${pf10}
+################################################################################
+#11. dosbox
+#11.1 sdl_sound 1.0.3
+p111='/media/sdb7/software/virtualize/dosbox/sdl_sound/'
+pf111='SDL_sound-1.0.3-x86_64-1_SBo.txz'
+p11='/media/sdb7/software/virtualize/dosbox/'
+pf11='dosbox-0.74-x86_64-2_SBo.txz'
+installpkg ${p111}${pf111}
+installpkg ${p11}${pf11}
+################################################################################
+#12. qemu 2.10.1
+p12='/media/sdb7/software/virtualize/qemu/'
+pf12='qemu-2.10.1-x86_64-1_SBo.txz'
+installpkg ${p12}${pf12}
+################################################################################
+#13. virtualbox 5.2.6
+p13='/media/sdb7/software/virtualize/virtualbox/'
+pf131='VirtualBox-5.2.6-120293-Linux_amd64.run'
+pf132='Oracle_VM_VirtualBox_Extension_Pack-5.2.6-120293.vbox-extpack'
+sh ${p13}${pf131}
+virtualbox ${p13}${pf132}
+################################################################################
+#14. supertux 0.4.0
+#requires 1 openal 1.18.2
+#requires 2 sdl_image requires sdl2 2.0.6
+#requires 2 sdl_image
+#requires 3 physfs
+p14='/media/sdb9/mgame/SuperTux/'
+p141='/media/sdb9/mgame/SuperTux/requires/01_OPenAL/'
+pf141='OpenAL-1.18.2-x86_64-1_SBo.txz'
+p1421='/media/sdb9/mgame/SuperTux/requires/02_SDL_image/requires/'
+pf1421='SDL2-2.0.6-x86_64-1_SBo.txz'
+p142='/media/sdb9/mgame/SuperTux/requires/02_SDL_image/'
+pf142='SDL2_image-2.0.1-x86_64-2_SBo.txz'
+p143='/media/sdb9/mgame/SuperTux/requires/03_physfs/'
+pf143='physfs-3.0.0-x86_64-1_SBo.txz'
+pf14='supertux2-0.4.0-x86_64-1_SBo.txz'
+#installpkg ${p141}${pf141}
+#installpkg ${p1421}${pf1421}
+#installpkg ${p142}${pf142}
+installpkg ${p143}${pf143}
+installpkg ${p14}${pf14}
+################################################################################
+#15. supertuxkart 0.9.2
+#requires openal 1.18.2
+p15='/media/sdb9/mgame/SuperTuxKart/'
+p151='/media/sdb9/mgame/SuperTuxKart/requires/OPenAL/'
+pf151='OpenAL-1.18.2-x86_64-1_SBo.txz'
+pf15='supertuxkart-0.9.2-x86_64-1_SBo.txz'
+#installpkg ${p151}${pf151}
+installpkg ${p15}${pf15}
+################################################################################
+#16. fish shell 2.7.0
+#requires man-db 2.7.6.1
+p16='/media/sdb7/software/shell/fish/'
+p161='/media/sdb7/software/shell/fish/requires/'
+pf16='fish-2.7.0-x86_64-1_SBo.txz'
+pf161='man-db-2.7.6.1-x86_64-2_SBo.txz'
+installpkg ${p161}${pf161}
+installpkg ${p16}${pf16}
+################################################################################
+#17. fdupes 1.6.1
+# to delete the duplicated files by checking md5 code
+p17='/media/sdb7/software/editor/fdupes/'
+pf17='fdupes-1.6.1-x86_64-1_SBo.txz'
+installpkg ${p17}${pf17}
+################################################################################
+################################################################################
+echo May need to install texlive and virtualbox extension manually.
+################################################################################

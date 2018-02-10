@@ -1,0 +1,19 @@
+#!/bin/bash
+#by 229 19/November/2017
+p0='/media/sdc1/sysbak/slconfig/000/'
+pr='/media/sdc1/sysbak/slconfig/root/'
+u0='/home/000/'
+ur='/root/'
+#configure 000
+fset=$( echo $( ls -AF ${p0} ) )
+for f in ${fset}
+do
+cp -rv  ${p0}${f} ${u0}
+done
+chown -R 000:000 ${u0}
+#configure root
+fset=$( echo $( ls -AF ${pr} ) )
+for f in ${fset}
+do
+cp -rv ${pr}${f} ${ur}
+done
