@@ -1,4 +1,5 @@
 # configure-Slackware-Linux
+
 #!/bin/bash
 ############################################################
 #ATTENTION !!!
